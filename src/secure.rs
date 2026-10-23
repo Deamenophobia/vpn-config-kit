@@ -80,7 +80,7 @@ pub fn check_mode(path: &Path, dir: bool) -> Result<()> {
         let ok = crate::runtime::run_command(command, None, std::time::Duration::from_secs(10));
         ensure!(
             ok.is_ok(),
-            "private path ACL must permit only current user, SYSTEM and Administrators; create a dedicated private directory"
+            "private path must be owned by current user and permit only current user, SYSTEM and Administrators; create a dedicated private directory"
         );
     }
     Ok(())
@@ -113,10 +113,26 @@ fn restrict_windows(path: &Path, dir: bool) -> Result<()> {
         "invalid Windows user SID"
     );
     let grant = format!("*{sid}:{}F", if dir { "(OI)(CI)" } else { "" });
-    // Suppress localized stdout at the source while retaining a checked native exit code.
+    // Elevated Windows processes can default the owner to Administrators.
+    // Assign the current user explicitly rather than weakening the ownership check.
+    // Suppress localized stdout while retaining each checked native exit code.
+    const RESTRICT: &str = r#"
+$ErrorActionPreference='Stop'
+& icacls.exe $env:VPN_CONFIG_KIT_PRIVATE_PATH /inheritance:r /grant:r $env:VPN_CONFIG_KIT_PRIVATE_GRANT | Out-Null
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$acl=if([System.IO.Directory]::Exists($env:VPN_CONFIG_KIT_PRIVATE_PATH)){[System.IO.Directory]::GetAccessControl($env:VPN_CONFIG_KIT_PRIVATE_PATH)}else{[System.IO.File]::GetAccessControl($env:VPN_CONFIG_KIT_PRIVATE_PATH)}
+if ($acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value -ne $env:VPN_CONFIG_KIT_PRIVATE_OWNER) {
+    & icacls.exe $env:VPN_CONFIG_KIT_PRIVATE_PATH /setowner ('*' + $env:VPN_CONFIG_KIT_PRIVATE_OWNER) | Out-Null
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+exit 0
+"#;
     let mut command = std::process::Command::new("powershell.exe");
-    command.args(["-NoProfile","-NonInteractive","-Command","& icacls.exe $env:VPN_CONFIG_KIT_PRIVATE_PATH /inheritance:r /grant:r $env:VPN_CONFIG_KIT_PRIVATE_GRANT | Out-Null; exit $LASTEXITCODE"])
-        .env("VPN_CONFIG_KIT_PRIVATE_PATH",path).env("VPN_CONFIG_KIT_PRIVATE_GRANT",grant);
+    command
+        .args(["-NoProfile", "-NonInteractive", "-Command", RESTRICT])
+        .env("VPN_CONFIG_KIT_PRIVATE_PATH", path)
+        .env("VPN_CONFIG_KIT_PRIVATE_OWNER", sid)
+        .env("VPN_CONFIG_KIT_PRIVATE_GRANT", grant);
     crate::runtime::run_command(command, None, std::time::Duration::from_secs(10))
         .context("could not restrict Windows ACL")?;
     Ok(())
