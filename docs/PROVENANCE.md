@@ -1,6 +1,6 @@
 # Provenance and licensing
 
-VPN Config Kit is an independently written Rust implementation. No legacy implementation files, snippets, migrations, tests, deployment files, assets or Git history were imported. Private source identities, revision references and migration findings remain outside this repository. This is not a claim of a legal clean-room process.
+VPN Config Kit is an independently written Rust implementation. No legacy implementation files, snippets, migrations, tests, deployment files, assets or Git history were imported. Detailed source mapping, revision references and private migration findings remain outside this repository. This is not a claim of a legal clean-room process.
 
 The project evolved from [kokoro-vpn](https://gitlab.com/kokoro-tech/infra/kokoro-vpn), whose source requires repository access. WireGuard support uses standard tooling and independently rendered profiles. The optional Xray backend uses new management code around a separately installed upstream engine; no legacy transport implementation was copied.
 
