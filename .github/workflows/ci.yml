@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  quality:
+    name: Formatting and Clippy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install Rust tools
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt
+      - name: Formatting
+        run: cargo +stable fmt --all -- --check
+      - name: Clippy
+        run: cargo +stable clippy --locked --all-targets --all-features -- -D warnings
+      - name: Shell syntax
+        run: bash -n scripts/install-xray.sh scripts/linux-netns-test.sh
+
+  test:
+    name: Tests (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+      - name: Build
+        run: cargo +stable build --locked --all-targets
+      - name: Test with bundled SQLite
+        run: cargo +stable test --locked
+      - name: Install system SQLite
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev pkg-config
+      - name: Test with system SQLite
+        if: runner.os == 'Linux'
+        run: cargo +stable test --locked --no-default-features
+
+  backends:
+    name: Linux backend integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Install prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wireguard-tools iproute2 nftables iputils-ping jq util-linux curl unzip openssl
+          rustup toolchain install stable --profile minimal
+      - name: Build toolkit
+        run: cargo +stable build --locked
+      - name: WireGuard in isolated network namespaces
+        run: sudo env VPN_CONFIG_KIT_BIN="$GITHUB_WORKSPACE/target/debug/vpn-config-kit" bash scripts/linux-netns-test.sh
+      - name: Install pinned Xray engine
+        run: sudo sh scripts/install-xray.sh
+      - name: Native Xray configuration
+        env:
+          VPN_CONFIG_KIT_XRAY_BIN: /usr/local/lib/vpn-config-kit/xray
+        run: cargo +stable test --locked --test xray pinned_native -- --ignored
+      - name: Xray loopback traffic and credential lifecycle
+        run: |
+          python3 scripts/xray-loopback.py \
+            --toolkit "$GITHUB_WORKSPACE/target/debug/vpn-config-kit" \
+            --engine /usr/local/lib/vpn-config-kit/xray \
+            --scratch "$RUNNER_TEMP"
