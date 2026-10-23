@@ -1,0 +1,12 @@
+/target/
+*.db
+*.db-*
+*.key
+*.svg
+*.conf
+*.log
+/state/
+xray-state.json
+managed.toml
+candidate.json
+/exports/

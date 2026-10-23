@@ -1,0 +1,15 @@
+# Select with: vpn-config-kit --backend xray-reality --config /etc/vpn-config-kit/xray.toml ...
+version = 1
+backend = "xray-reality"
+listen = "0.0.0.0"
+listen_port = 443
+endpoint = "vpn.example.com:443"
+# Replace both with a suitable TLS 1.3 target and its matching hostname.
+server_name = "www.example.com"
+target = "www.example.com:443"
+state_dir = "/var/lib/vpn-config-kit-xray"
+engine_path = "/usr/local/lib/vpn-config-kit/xray"
+manager_path = "/usr/local/bin/vpn-config-kit"
+command_timeout_secs = 30
+# Keep false on an internet gateway; true permits access to its private networks.
+allow_private_destinations = false

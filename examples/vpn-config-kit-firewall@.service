@@ -1,0 +1,13 @@
+[Unit]
+Description=VPN Config Kit gateway firewall (%i)
+Before=vpn-config-kit@%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+UMask=0077
+ExecStart=/bin/sh /etc/vpn-config-kit/%i-firewall.sh apply
+ExecStop=/bin/sh /etc/vpn-config-kit/%i-firewall.sh remove
+
+[Install]
+WantedBy=multi-user.target

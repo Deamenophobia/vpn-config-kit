@@ -1,0 +1,18 @@
+[Unit]
+Description=VPN Config Kit WireGuard gateway (%i)
+Wants=network-online.target
+Requires=vpn-config-kit-firewall@%i.service
+After=network-online.target vpn-config-kit-firewall@%i.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+UMask=0077
+ExecStart=/usr/local/bin/vpn-config-kit --config /etc/vpn-config-kit/%i.toml up
+ExecReload=/usr/local/bin/vpn-config-kit --config /etc/vpn-config-kit/%i.toml reconcile
+ExecStop=/usr/local/bin/vpn-config-kit --config /etc/vpn-config-kit/%i.toml down
+TimeoutStartSec=180
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

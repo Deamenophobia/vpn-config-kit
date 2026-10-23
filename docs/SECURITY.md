@@ -1,0 +1,25 @@
+# Lifecycle and security model
+
+This document describes WireGuard. The optional [Xray backend](XRAY.md) uses separate protected credentials and atomic state, a pinned external engine and a dedicated systemd service. Credential changes interrupt that service's sessions. Revoke each backend separately for devices that use both.
+
+The administrator, OS/kernel, local filesystem, trusted PATH and WireGuard tools are trusted. The interface and state directory belong exclusively to this gateway. Do not run wg-quick@, NetworkManager, other managers or a second VPN Config Kit state directory against that interface. Root can bypass these protections. There is no listening management service, user registration or token authentication boundary.
+
+SQLite uses schema version 1, a single writer and `synchronous=FULL`. Enrollment acquires `BEGIN IMMEDIATE`, selects a usable free host, inserts a `pending` record and commits before touching runtime. Unique public keys and a partial unique address index enforce reservations even across competing connections. Names/public keys remain reserved in tombstones; addresses can be reused only after verified revocation.
+
+The OS file lock spans every CLI operation, from state inspection through runtime work and final commit. A competing manager fails with an actionable retry message. The lifecycle is `pending -> active -> revoking -> revoked`; revocation can also cancel `pending`. Database updates never delete the peer identity. `--defer` commits intent only.
+
+Reconciliation records an attempt/interrupted-operation reason, atomically replaces both persisted files, calls `wg syncconf`, reads only public runtime fields, compares the complete peer/address set, gateway public key and port, rereads both persisted files and commits completion. All peers not in desired state, including unknown runtime peers, are removed. A failure at any boundary retains intent and reservations with a sanitized phase for retry. Repeating reconciliation and revocation is safe. No snapshot outside the operation lock can reactivate a revoked peer.
+
+First startup refuses a preexisting interface without its ownership marker. Later operations also verify the interface key; they refuse an interface now owned by another key. An interrupted first startup can be retried with `up`: incomplete owned link setup is torn down and rebuilt. No route changes occur on Windows.
+
+`prepare` alone never frees a revoking address. If the interface is down, run `up` to establish runtime evidence; an absent interface is not reported as successful runtime revocation. Keep offline state protected until this is done. Runtime drift and restored old native configurations are corrected on the next `reconcile`; a privileged external actor can reintroduce a peer between checks, so exclusive ownership is essential.
+
+Keys use the maintained X25519 library with the OS random generator, not a custom packet engine. Secret wrappers redact Debug and zeroize owned secret strings on drop; this is not a guarantee against OS swap, dumps or every transient allocation. Gateway keys, profiles and QR images require private files. Client private keys never enter SQLite. Possession of an exported profile permits that peer's identity; revoke the peer if a profile is lost.
+
+Atomic replacement uses a private same-directory temporary file, file synchronization, rename and (Unix) parent-directory synchronization. A crash can leave a private temporary file containing a server key; inspect and remove orphan temp files only with the manager stopped. Exports use create-new and do not overwrite. Linux rejects symlinks, hard-linked private files and broad permissions. Windows checks ACLs and rejects reparse paths. Filesystem administrators are outside the threat model.
+
+Subprocess arguments are passed directly. Native tool stderr and error output are not reflected into diagnostics or retry records. Captured stdout is bounded to 1 MiB. Linux process groups are terminated on failure or timeout, including descendants holding inherited pipes. Tools are resolved through the administrator's trusted PATH.
+
+Full mode means **all IPv4 destinations**, not verified full-device protection. IPv6 must be blocked independently on the client, including during disconnect. A default route is not a kill switch. Verify DNS, browser DNS, reconnect, suspend/resume, roaming and tunnel-down behavior on each client. The tool does not attest that an acknowledgment flag actually blocked IPv6.
+
+Upgrade: stop all managers and the interface; back up the entire protected state directory plus TOML configuration and current binary. SQLite schema migration runs transactionally on open. This release creates v1 and rejects newer schemas; there are no destructive automatic downgrade migrations. Roll back binary and matching configuration/database/key together while offline. Restoring an old backup can restore revoked identities: before bringing the interface up, reapply all subsequent revocations from your protected operator record. Never copy a live SQLite file without a consistent backup mechanism.

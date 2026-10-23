@@ -1,0 +1,19 @@
+# Edit endpoint and egress_interface for your own gateway before use.
+version = 1
+interface = "wg0"
+endpoint = "vpn.example.com:51820"
+listen_port = 51820
+pool = "10.77.0.0/24"
+gateway_address = "10.77.0.1"
+egress_interface = "eth0"
+routing = "full"
+split_routes = []
+dns_policy = "tunnel"
+dns = ["1.1.1.1"]
+ipv6_policy = "block-on-client"
+# Add every LAN/VPC/container subnet that must not overlap the pool.
+excluded_subnets = []
+keepalive = 0
+# mtu = 1420  # omit for wg-quick's automatic selection
+state_dir = "/var/lib/vpn-config-kit"
+command_timeout_secs = 15
