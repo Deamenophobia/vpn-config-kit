@@ -12,4 +12,4 @@ Gateway services run on Linux. Windows supports local configuration and exports.
 
 [Setup](docs/INSTALL.md) · [Usage](docs/USAGE.md) · [Xray](docs/XRAY.md) · [Configuration](docs/CONFIGURATION.md) · [Security](docs/SECURITY.md) · [Notices](THIRD_PARTY_NOTICES.md)
 
-If you run into a problem, please contact me by opening an issue in this repository. Do not include credentials or client profiles.
+If you run into a problem, please contact me by opening an issue in this repository.
